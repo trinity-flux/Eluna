@@ -1,0 +1,42 @@
+# Keeps master current with ElunaLuaEngine/Eluna while keeping our own changes:
+# upstream is merged on top, never reset. Runs before the TrinityCore fork's
+# sync so that one picks up the result.
+#
+# Pushing a merge that touches .github/workflows needs a token with the
+# "workflows" permission, so set the SYNC_TOKEN secret (fine-grained PAT with
+# Contents + Workflows read/write on this repo). Without it, those merges fail.
+name: sync-upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'
+
+permissions:
+  contents: write
+
+concurrency: sync-upstream
+
+jobs:
+  sync:
+    if: github.repository == 'trinity-flux/Eluna'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Merge ElunaLuaEngine/Eluna master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898233+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/ElunaLuaEngine/Eluna.git
+          git fetch upstream master
+          if ! git merge --no-edit -m "Merge ElunaLuaEngine/Eluna master" upstream/master; then
+            git merge --abort
+            echo "::error::Merge conflict with ElunaLuaEngine/Eluna, resolve it by hand"
+            exit 1
+          fi
+          git push origin HEAD:master
